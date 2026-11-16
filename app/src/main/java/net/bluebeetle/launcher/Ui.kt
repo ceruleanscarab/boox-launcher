@@ -6,7 +6,11 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Typeface
+import android.content.res.ColorStateList
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.TypedValue
@@ -60,9 +64,27 @@ fun Context.flatButton(
     maxLines = 1
     minHeight = dp(minHeightDp)
     setPadding(dp(20), dp(8), dp(20), dp(8))
-    background = box(strokeDp = 2, fill = if (filled) INK else PAPER)
+    // Inverts the instant a finger lands, so a tap registers visibly before anything else happens.
+    background = pressable(
+        box(strokeDp = 2, fill = if (filled) INK else PAPER),
+        box(strokeDp = 2, fill = if (filled) PAPER else INK),
+    )
+    setTextColor(ColorStateList(
+        arrayOf(intArrayOf(android.R.attr.state_pressed), intArrayOf()),
+        intArrayOf(if (filled) INK else PAPER, if (filled) PAPER else INK),
+    ))
     setOnClickListener { onClick() }
 }
+
+/** A background that swaps to [pressed] while touched. No ripple, no fade: one clean e-ink update. */
+fun pressable(normal: Drawable, pressed: Drawable): Drawable = StateListDrawable().apply {
+    addState(intArrayOf(android.R.attr.state_pressed), pressed)
+    addState(intArrayOf(), normal)
+}
+
+/** Press feedback for icons and tiles: a solid outline appears around the thing being touched. */
+fun Context.pressOutline(): Drawable =
+    pressable(ColorDrawable(Color.TRANSPARENT), box(strokeDp = 3, radiusDp = 10))
 
 fun Context.rule(): View = View(this).apply { setBackgroundColor(INK) }
 

@@ -21,7 +21,6 @@ import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Date
-import java.util.concurrent.Executors
 
 /**
  * The home screen: the book you're reading up top, then widgets, pinned apps, and All apps.
@@ -34,9 +33,7 @@ class HomeActivity : Activity() {
     private lateinit var widgetManager: AppWidgetManager
     private lateinit var root: FrameLayout
     private val main = Handler(Looper.getMainLooper())
-    private val loader = Executors.newSingleThreadExecutor()
 
-    private var apps: List<AppEntry> = emptyList()
     private var home: View? = null
     private var drawer: View? = null
     private var drawerPage = 0
@@ -56,6 +53,7 @@ class HomeActivity : Activity() {
     private lateinit var widgetBox: LinearLayout
 
     private var widgetSignature: String? = null
+    private var favSignature: String? = null
     private var coverStamp = -1L
     private var listening = false
 
@@ -96,12 +94,17 @@ class HomeActivity : Activity() {
         refreshBook()
         refreshWidgets()
         refreshFavorites()
-        loadApps()
+        Apps.onChange = {
+            refreshFavorites()
+            if (drawer != null) showDrawer()
+        }
+        Apps.ensureLoaded(this)
     }
 
     override fun onPause() {
         super.onPause()
         BookStore.onChange = null
+        Apps.onChange = null
     }
 
     /** Pressing Home while already home closes the app list. */
@@ -126,27 +129,13 @@ class HomeActivity : Activity() {
         if (drawerWasOpen) showDrawer()
     }
 
-    private fun loadApps() {
-        loader.execute {
-            val loaded = try { Apps.load(this) } catch (e: Exception) { emptyList() }
-            main.post {
-                if (isDestroyed) return@post
-                val changed = loaded.map { it.key } != apps.map { it.key }
-                apps = loaded
-                if (changed) {
-                    refreshFavorites()
-                    if (drawer != null) showDrawer()
-                }
-            }
-        }
-    }
-
     // ---------------------------------------------------------------- home layout
 
     private fun buildHome() {
         root.removeAllViews()
         drawer = null
         widgetSignature = null
+        favSignature = null
         coverStamp = -1L
         val land = landscape
 
@@ -266,6 +255,8 @@ class HomeActivity : Activity() {
                 addView(coverBox, lp(coverW, coverH))
                 addView(text, lp(0, MATCH, 1f, left = dp(28)))
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            background = pressOutline()
             setOnClickListener { openReader() }
         }
     }
@@ -371,11 +362,16 @@ class HomeActivity : Activity() {
 
     private fun refreshFavorites() {
         if (home == null) return
-        favRow.removeAllViews()
-        val byKey = apps.associateBy { it.key }
+        val byKey = Apps.all.associateBy { it.key }
         val favs = prefs.favorites.mapNotNull { byKey[it] }.take(MAX_FAVORITES)
+        // Only touch the row when something actually changed: every redraw is a visible e-ink refresh.
+        val signature = favs.joinToString("|") { it.key } +
+            "#${Apps.generation}#${Apps.complete}#${prefs.boostColor}"
+        if (signature == favSignature) return
+        favSignature = signature
+        favRow.removeAllViews()
         if (favs.isEmpty()) {
-            val hint = if (apps.isEmpty()) "" else
+            val hint = if (!Apps.complete) "" else
                 "Pin apps here: open All apps, then press and hold one."
             favRow.addView(
                 label(hint, 15, color = SOFT_INK).apply { setPadding(0, dp(16), 0, dp(16)) },
@@ -393,8 +389,9 @@ class HomeActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(4), dp(10), dp(4), dp(10))
+            background = pressOutline()
             addView(ImageView(context).apply {
-                setImageDrawable(app.freshIcon())
+                setImageBitmap(app.icon)
                 if (prefs.boostColor) colorFilter = COLOR_BOOST
             }, lp(dp(iconDp), dp(iconDp)))
             addView(label(app.label, 14).apply {
@@ -432,7 +429,7 @@ class HomeActivity : Activity() {
         val rows = if (land) 4 else 7
         val perPage = cols * rows
         val hidden = prefs.hidden
-        val visible = apps.filter { it.key !in hidden }
+        val visible = if (Apps.complete) Apps.all.filter { it.key !in hidden } else emptyList()
         val pages = maxOf(1, (visible.size + perPage - 1) / perPage)
         drawerPage = drawerPage.coerceIn(0, pages - 1)
         val pageApps = visible.drop(drawerPage * perPage).take(perPage)
@@ -455,7 +452,7 @@ class HomeActivity : Activity() {
             }
             grid.addView(row, lp(MATCH, 0, 1f))
         }
-        if (visible.isEmpty()) {
+        if (!Apps.complete) {
             grid.removeAllViews()
             grid.addView(label("Loading apps…", 18, color = SOFT_INK), lp(MATCH, WRAP, top = dp(40)))
         }
