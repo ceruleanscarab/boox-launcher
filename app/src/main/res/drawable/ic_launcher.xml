@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Rounded tile -->
+    <path
+        android:fillColor="#1F4E79"
+        android:pathData="M10,2h28a8,8 0 0 1 8,8v28a8,8 0 0 1 -8,8h-28a8,8 0 0 1 -8,-8v-28a8,8 0 0 1 8,-8z" />
+    <!-- Open book -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9,14c5,-2 10,-2 14,1v20c-4,-3 -9,-3 -14,-1z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,14c-5,-2 -10,-2 -14,1v20c4,-3 9,-3 14,-1z" />
+</vector>
